@@ -100,7 +100,7 @@ def validate_pin(scrollable_frame):
 def create_gui():
     global root, pin_entry
     root = tk.Tk()
-    root.title("LeafLink Order Viewer")
+    root.title("LeafLink Order Viewer by Grissom")
     root.geometry('1200x800')  # Adjust size as needed
 
     style = ttk.Style(root)
