@@ -22,7 +22,7 @@ def populate_treeview(orders, scrollable_frame):
         tk.Label(order_frame, text=f"Buyer: {buyer_name} - ID: {buyer_id}", font=('Helvetica', 16, 'bold')).pack(side="top", fill="x")
 
         # Treeview for line items
-        columns = ('SKU', 'Ship Tag', 'Product Name', 'Unit Multiplier', 'Base 3.50', 'Base 7.00', 'Base 28.00', 'Is Sample', 'Quantity')
+        columns = ('SKU', 'Ship Tag', 'Product Name', 'Unit Multiplier', 'Base 3.50', 'Base 7.00', 'Base 28.00', 'Base 448.00', 'Is Sample', 'Quantity')
         tree = ttk.Treeview(order_frame, columns=columns, show="headings", height=5)
         for col in columns:
             tree.heading(col, text=col)
@@ -35,33 +35,45 @@ def populate_treeview(orders, scrollable_frame):
             quantity = item.get("quantity", "N/A")
             is_sample = "Yes" if item.get("is_sample", False) else "No"  # Check if item is a sample
 
-            # Initialize empty strings for specialized base unit columns and bulk
-            base_3_50 = base_7_00 = base_28_00 = ""
+            # Initialize empty strings for specialized base unit columns
+            base_3_50 = base_7_00 = base_28_00 = base_448_00 = ""
+            unit_multiplier_display = item.get("unit_multiplier", "-")  # Default display value for unit multiplier
 
             # Check base units and format quantity without decimals
             base_units = float(product_info.get('base_units_per_unit', 0))
             if base_units == 3.50:
-                base_3_50 = str(int(float(quantity)))
+                base_3_50 = str(int(float(quantity))) if quantity != "N/A" else "-"
+                unit_multiplier_display = "-"
             elif base_units == 7.00:
-                base_7_00 = str(int(float(quantity)))
+                base_7_00 = str(int(float(quantity))) if quantity != "N/A" else "-"
+                unit_multiplier_display = "-"
             elif base_units == 28.00:
-                base_28_00 = str(int(float(quantity)))
+                base_28_00 = str(int(float(quantity))) if quantity != "N/A" else "-"
+                unit_multiplier_display = "-"
+            elif base_units == 448.00:
+                base_448_00 = str(int(float(quantity))) if quantity != "N/A" else "-"
+                unit_multiplier_display = "-"
 
-            tree.insert('', 'end', values=(
-                product_info.get("sku", "N/A"),
-                "Ship Tag",
-                product_info.get("name", "N/A"),
-                "",  # Leave Unit Multiplier empty if any base unit column is populated
-                base_3_50,
-                base_7_00,
-                base_28_00,
-                is_sample,  # Insert sample status
-                str(int(float(quantity)))  # Ensure quantity has no decimals
-            ))
+            # Format all columns to show '-' if they are empty, except 'Ship Tag'
+            values = (
+                product_info.get("sku", "N/A") or "-",
+                "",  # Keep 'Ship Tag' column empty
+                product_info.get("name", "N/A") or "-",
+                unit_multiplier_display,
+                base_3_50 or "-",
+                base_7_00 or "-",
+                base_28_00 or "-",
+                base_448_00 or "-",
+                is_sample,
+                str(int(float(quantity))) if quantity != "N/A" else "-"
+            )
+
+            tree.insert('', 'end', values=values)
 
         # Copy to Clipboard Button for this order
         copy_button = tk.Button(order_frame, text="Copy Order to Clipboard", command=lambda tr=tree: copy_to_clipboard(tr))
         copy_button.pack(pady=10)
+
 
 def copy_to_clipboard(tree):
     """Copies all items in the specified Treeview to the clipboard."""
@@ -91,24 +103,29 @@ def create_gui():
     root.title("LeafLink Order Viewer")
     root.geometry('1200x800')  # Adjust size as needed
 
-    tk.Label(root, text="Enter PIN:").pack(pady=10)
-    pin_entry = tk.Entry(root, show="*")
-    pin_entry.pack(pady=5)
+    style = ttk.Style(root)
+    style.configure('TFrame', background='light gray')
+    style.configure('TLabel', background='light gray', font=('Helvetica', 12))
+    style.configure('TButton', font=('Helvetica', 12, 'bold'), borderwidth='1')
+    style.map('TButton', foreground=[('pressed', 'red'), ('active', 'blue')], background=[('pressed', '!disabled', 'black'), ('active', 'white')])
 
-    submit_button = tk.Button(root, text="Submit", command=lambda: validate_pin(scrollable_frame))
-    submit_button.pack(pady=10)
+    tk.Label(root, text="Enter PIN:", font=('Helvetica', 14, 'bold')).pack(pady=10, padx=10)
+    pin_entry = tk.Entry(root, font=('Helvetica', 14), show="*")
+    pin_entry.pack(pady=5, padx=10)
+
+    submit_button = ttk.Button(root, text="Submit", command=lambda: validate_pin(scrollable_frame))
+    submit_button.pack(pady=10, padx=10)
 
     # Scrollable frame setup
-    canvas = tk.Canvas(root)
+    canvas = tk.Canvas(root, bd=0, highlightthickness=0, relief='ridge')
+    canvas.pack(side="left", fill="both", expand=True)
     scrollbar = ttk.Scrollbar(root, orient="vertical", command=canvas.yview)
-    scrollable_frame = ttk.Frame(canvas)
-
-    scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-    canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+    scrollbar.pack(side="right", fill="y")
     canvas.configure(yscrollcommand=scrollbar.set)
 
-    canvas.pack(side="left", fill="both", expand=True)
-    scrollbar.pack(side="right", fill="y")
+    scrollable_frame = ttk.Frame(canvas, style='TFrame')
+    scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+    canvas_frame = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
 
     root.mainloop()
 
