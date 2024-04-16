@@ -22,7 +22,7 @@ def populate_treeview(orders, scrollable_frame):
         tk.Label(order_frame, text=f"Buyer: {buyer_name} - ID: {buyer_id}", font=('Helvetica', 16, 'bold')).pack(side="top", fill="x")
 
         # Treeview for line items
-        columns = ('SKU', 'Ship Tag', 'Product Name', 'Unit Multiplier', 'Base 3.50', 'Base 7.00', 'Base 28.00', 'Base 448.00', 'Is Sample')
+        columns = ('SKU', 'Ship Tag', 'Product Name', 'Unit Multiplier', 'Base 3.50', 'Base 7.00', 'Base 28.00', 'Base 448.00', 'Is Sample', 'Quantity')
         tree = ttk.Treeview(order_frame, columns=columns, show="headings", height=5)
         for col in columns:
             tree.heading(col, text=col)
@@ -33,10 +33,11 @@ def populate_treeview(orders, scrollable_frame):
         for item in order.get("line_items", []):
             product_info = item.get("frozen_data", {}).get("product", {})
             quantity = item.get("quantity", "N/A")
-            is_sample = "Yes" if item.get("is_sample", False) else "No"  # Check if item is a sample
+            is_sample = "Yes" if item.get("is_sample", False) else "No"
 
             # Initialize empty strings for specialized base unit columns
             base_3_50 = base_7_00 = base_28_00 = base_448_00 = ""
+            unit_multiplier_display = item.get("unit_multiplier", "-")  # Default display value for unit multiplier
 
             # Check base units and format quantity without decimals
             base_units = float(product_info.get('base_units_per_unit', 0))
@@ -52,9 +53,9 @@ def populate_treeview(orders, scrollable_frame):
             # Format all columns to show '-' if they are empty
             values = (
                 product_info.get("sku", "N/A") or "-",
-                "",  # Keep 'Ship Tag' column empty
+                "",  # Ship Tag left empty
                 product_info.get("name", "N/A") or "-",
-                str(int(float(quantity))) if quantity != "N/A" else "-",
+                unit_multiplier_display,
                 base_3_50 or "-",
                 base_7_00 or "-",
                 base_28_00 or "-",
@@ -90,10 +91,18 @@ def validate_pin(scrollable_frame):
     else:
         messagebox.showerror("Error", "Invalid PIN")
 
+def refresh_orders(scrollable_frame):
+    """Refreshes and fetches new orders to display."""
+    orders = fetch_orders()
+    if orders:
+        populate_treeview(orders, scrollable_frame)
+    else:
+        messagebox.showinfo("Information", "No new submitted orders to process.")
+
 def create_gui():
     global root, pin_entry
     root = tk.Tk()
-    root.title("LeafLink Order Viewer by Grissom")
+    root.title("LeafLink Order Viewer")
     root.geometry('1200x800')  # Adjust size as needed
 
     tk.Label(root, text="Enter PIN:", font=('Helvetica', 14, 'bold')).pack(pady=10)
@@ -103,6 +112,10 @@ def create_gui():
     submit_button = tk.Button(root, text="Submit", command=lambda: validate_pin(scrollable_frame))
     submit_button.pack(pady=10)
 
+    # Refresh button setup
+    refresh_button = tk.Button(root, text="Refresh", command=lambda: refresh_orders(scrollable_frame))
+    refresh_button.pack(pady=10)
+
     # Scrollable frame setup
     canvas = tk.Canvas(root)
     scrollbar = ttk.Scrollbar(root, orient="vertical", command=canvas.yview)
@@ -110,9 +123,7 @@ def create_gui():
     canvas.configure(yscrollcommand=scrollbar.set)
 
     scrollable_frame = ttk.Frame(canvas)
-    scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
     canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-
     canvas.pack(side="left", fill="both", expand=True)
 
     root.mainloop()

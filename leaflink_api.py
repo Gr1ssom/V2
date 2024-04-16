@@ -3,7 +3,7 @@ import requests
 
 # Constants for API access
 API_KEY = 'a5756636f561105935c17d86f8c657306c6b9f0a609997c2b7f361ffa9df3985'
-API_URL = 'https://sandbox.leaflink.com/api/v2/orders-received/'
+API_URL = 'https://www.leaflink.com/api/v2/orders-received/'
 
 def fetch_orders():
     """Fetches orders with 'Submitted' status from the LeafLink API and includes line item details."""
