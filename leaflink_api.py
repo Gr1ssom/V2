@@ -2,7 +2,7 @@
 import requests
 
 # Constants for API access
-API_KEY = 'a5756636f561105935c17d86f8c657306c6b9f0a609997c2b7f361ffa9df3985'
+API_KEY = '8ac014b8788268a5fcd1028ac22b948ce29c11e7267d098fdb13c9f3ca2face6'
 API_URL = 'https://www.leaflink.com/api/v2/orders-received/'
 
 def fetch_orders():
