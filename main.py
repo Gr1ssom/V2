@@ -1,132 +1,136 @@
-import tkinter as tk
-from tkinter import ttk, messagebox
-from leaflink_api import fetch_orders
+import sys
+from PyQt5.QtWidgets import QApplication, QMainWindow, QGroupBox, QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLabel, QLineEdit, QTreeView, QMessageBox
+from PyQt5.QtGui import QStandardItemModel, QStandardItem, QIcon
+from PyQt5.QtWidgets import QMessageBox
 
-# Constants
-CORRECT_PIN = '1234'
+from leaflink_api import fetch_orders  # Ensure this module is adapted for PyQt or works generically
 
-def populate_treeview(orders, scrollable_frame):
-    """Populates the treeview with detailed order and line item data in separate sections, each with a copy button."""
-    for widget in scrollable_frame.winfo_children():
-        widget.destroy()  # Clear previous widgets
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle('LeafLink Order Viewer by Grissom')
+        self.setGeometry(100, 100, 1440, 810)  # 75% of 1920x1080 screen size
 
-    for order in orders:
-        buyer_name = order.get("customer", {}).get("display_name", "Unknown Buyer")
-        buyer_id = order.get("customer", {}).get("id", "N/A")
+        # Main Widget and Layout
+        self.main_widget = QWidget()
+        self.setCentralWidget(self.main_widget)
+        self.main_layout = QVBoxLayout()
+        self.main_widget.setLayout(self.main_layout)
 
-        # Create a frame for each order
-        order_frame = ttk.Frame(scrollable_frame, padding="10")
-        order_frame.pack(fill='x', expand=True, padx=10, pady=10, anchor="n")
+        # PIN Entry
+        self.pin_layout = QHBoxLayout()
+        self.pin_label = QLabel("Enter PIN:")
+        self.pin_entry = QLineEdit()
+        self.pin_entry.setEchoMode(QLineEdit.Password)  # Hide password
+        self.pin_submit = QPushButton('Submit')
+        self.pin_submit.clicked.connect(self.validate_pin)
 
-        # Order header
-        tk.Label(order_frame, text=f"Buyer: {buyer_name} - ID: {buyer_id}", font=('Helvetica', 16, 'bold')).pack(side="top", fill="x")
+        self.pin_layout.addWidget(self.pin_label)
+        self.pin_layout.addWidget(self.pin_entry)
+        self.pin_layout.addWidget(self.pin_submit)
 
-        # Treeview for line items
-        columns = ('SKU', 'Ship Tag', 'Product Name', 'Unit Multiplier', 'Base 3.50', 'Base 7.00', 'Base 28.00', 'Base 448.00', 'Is Sample', 'Quantity')
-        tree = ttk.Treeview(order_frame, columns=columns, show="headings", height=5)
-        for col in columns:
-            tree.heading(col, text=col)
-            tree.column(col, anchor="center", stretch=tk.YES)  # Allow columns to stretch
-        tree.pack(expand=True, fill='both')
+        self.main_layout.addLayout(self.pin_layout)
 
-        # Populate tree with line items
+    def validate_pin(self):
+        CORRECT_PIN = '1234'
+        entered_pin = self.pin_entry.text()
+        if entered_pin == CORRECT_PIN:
+            self.fetch_and_display_orders()
+        else:
+            QMessageBox.critical(self, "Error", "Invalid PIN")
+
+    def fetch_and_display_orders(self):
+        orders = fetch_orders()
+        self.populate_treeview(orders)  # Pass the fetched orders to populate_treeview
+
+    def populate_treeview(self, orders):
+        self.clear_layout(self.main_layout)  # Clear layout before adding new items
+
+        if not orders:
+            QMessageBox.information(self, "No Orders", "No orders found or available for display.")
+            return
+
+        for order in orders:
+            group_box = QGroupBox(f"Order ID: {order.get('id', 'N/A')} - Buyer: {order.get('customer', {}).get('display_name', 'Unknown')}")
+            vbox = QVBoxLayout()
+
+            tree = QTreeView()
+            model = QStandardItemModel()
+            columns = ['SKU', 'Ship Tag', 'Product Name', 'MIP Units', 'Base 3.50', 'Base 7.00', 'Base 28.00', 'Base 448.00', 'Is Sample']
+            model.setHorizontalHeaderLabels(columns)
+            tree.setModel(model)
+
+            for item in order.get("line_items", []):
+                product_info = item.get("frozen_data", {}).get("product", {})
+                base_units_per_unit = int(float(product_info.get("base_units_per_unit", "1")))
+                quantity = int(float(item.get("quantity", "0")))
+                base_3_5 = int(quantity) if base_units_per_unit == 3.5 else "-"
+                base_7 = int(quantity) if base_units_per_unit == 7 else "-"
+                base_28 = int(quantity) if base_units_per_unit == 28 else "-"
+                base_448 = int(quantity) if base_units_per_unit == 448 else "-"
+
+                mip_units_display = str(quantity) if base_units_per_unit < 1 else "-"
+
+                row_data = [
+                    product_info.get("sku", "-"),
+                    "",
+                    product_info.get("name", "-"),
+                    mip_units_display,
+                    str(base_3_5),
+                    str(base_7),
+                    str(base_28),
+                    str(base_448),
+                    "Yes" if item.get("is_sample", False) else "No"
+                ]
+                items = [QStandardItem(field) for field in row_data]
+                model.appendRow(items)
+
+            tree.setModel(model)
+            vbox.addWidget(tree)
+
+            # Save Button
+            save_button = QPushButton()
+            save_button.setIcon(QIcon('/src/save.png'))  # Ensure you have an appropriate save icon
+            save_button.clicked.connect(lambda _, b=order: self.copy_info_to_clipboard(b))
+            vbox.addWidget(save_button)
+
+            group_box.setLayout(vbox)
+            self.main_layout.addWidget(group_box)
+
+    def copy_info_to_clipboard(self, order):
+        clipboard = QApplication.clipboard()
+
+        # Start building the order details string
+        order_details = ""
+
+        # Loop through each line item to append their details
         for item in order.get("line_items", []):
             product_info = item.get("frozen_data", {}).get("product", {})
-            quantity = item.get("quantity", "N/A")
-            is_sample = "Yes" if item.get("is_sample", False) else "No"
+            base_units_per_unit = int(float(product_info.get("base_units_per_unit", "1")))
+            quantity = int(float(item.get("quantity", "0")))
+            base_3_5 = int(quantity) if base_units_per_unit == 3.5 else "-"
+            base_7 = int(quantity) if base_units_per_unit == 7 else "-"
+            base_28 = int(quantity) if base_units_per_unit == 28 else "-"
+            base_448 = int(quantity) if base_units_per_unit == 448 else "-"
 
-            # Initialize empty strings for specialized base unit columns
-            base_3_50 = base_7_00 = base_28_00 = base_448_00 = ""
-            unit_multiplier_display = item.get("unit_multiplier", "-")  # Default display value for unit multiplier
+            mip_units_display = str(quantity) if base_units_per_unit < 1 else "-"
 
-            # Check base units and format quantity without decimals
-            base_units = float(product_info.get('base_units_per_unit', 0))
-            if base_units == 3.50:
-                base_3_50 = str(int(float(quantity))) if quantity != "N/A" else "-"
-            elif base_units == 7.00:
-                base_7_00 = str(int(float(quantity))) if quantity != "N/A" else "-"
-            elif base_units == 28.00:
-                base_28_00 = str(int(float(quantity))) if quantity != "N/A" else "-"
-            elif base_units == 448.00:
-                base_448_00 = str(int(float(quantity))) if quantity != "N/A" else "-"
+            # Append formatted line item details to the order details string
+            order_details += f"{product_info.get('sku', '-')}\t\t{product_info.get('name', '-')}\t{mip_units_display}\t{base_3_5}\t{base_7}\t{base_28}\t{base_448}\t{'Yes' if item.get('is_sample', False) else 'No'}\n"  # Removed \t{int(quantity)}
 
-            # Format all columns to show '-' if they are empty
-            values = (
-                product_info.get("sku", "N/A") or "-",
-                "",  # Ship Tag left empty
-                product_info.get("name", "N/A") or "-",
-                unit_multiplier_display,
-                base_3_50 or "-",
-                base_7_00 or "-",
-                base_28_00 or "-",
-                base_448_00 or "-",
-                is_sample,
-                str(int(float(quantity))) if quantity != "N/A" else "-"
-            )
+        # Copy the order details string to the clipboard
+        clipboard.setText(order_details)
 
-            tree.insert('', 'end', values=values)
+        QMessageBox.information(self, "Copied", "Order details copied to clipboard!")
 
-        # Copy to Clipboard Button for this order
-        copy_button = tk.Button(order_frame, text="Copy Order to Clipboard", command=lambda tr=tree: copy_to_clipboard(tr))
-        copy_button.pack(pady=10)
+    def clear_layout(self, layout):
+        while layout.count():
+            child = layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
 
-def copy_to_clipboard(tree):
-    """Copies all items in the specified Treeview to the clipboard."""
-    tree.selection_set(tree.get_children())
-    selected_items = tree.selection()
-    clipboard_data = '\n'.join('\t'.join(tree.item(item, 'values')) for item in selected_items)
-    root.clipboard_clear()
-    root.clipboard_append(clipboard_data)
-    messagebox.showinfo("Success", "All order data copied to clipboard!")
-
-def validate_pin(scrollable_frame):
-    """Validates the entered PIN and fetches data if correct."""
-    entered_pin = pin_entry.get()
-    if entered_pin == CORRECT_PIN:
-        orders = fetch_orders()
-        if orders:
-            populate_treeview(orders, scrollable_frame)
-        else:
-            messagebox.showinfo("Information", "No submitted orders to process.")
-    else:
-        messagebox.showerror("Error", "Invalid PIN")
-
-def refresh_orders(scrollable_frame):
-    """Refreshes and fetches new orders to display."""
-    orders = fetch_orders()
-    if orders:
-        populate_treeview(orders, scrollable_frame)
-    else:
-        messagebox.showinfo("Information", "No new submitted orders to process.")
-
-def create_gui():
-    global root, pin_entry
-    root = tk.Tk()
-    root.title("LeafLink Order Viewer")
-    root.geometry('1200x800')  # Adjust size as needed
-
-    tk.Label(root, text="Enter PIN:", font=('Helvetica', 14, 'bold')).pack(pady=10)
-    pin_entry = tk.Entry(root, font=('Helvetica', 14), show="*")
-    pin_entry.pack(pady=5)
-
-    submit_button = tk.Button(root, text="Submit", command=lambda: validate_pin(scrollable_frame))
-    submit_button.pack(pady=10)
-
-    # Refresh button setup
-    refresh_button = tk.Button(root, text="Refresh", command=lambda: refresh_orders(scrollable_frame))
-    refresh_button.pack(pady=10)
-
-    # Scrollable frame setup
-    canvas = tk.Canvas(root)
-    scrollbar = ttk.Scrollbar(root, orient="vertical", command=canvas.yview)
-    scrollbar.pack(side="right", fill="y")
-    canvas.configure(yscrollcommand=scrollbar.set)
-
-    scrollable_frame = ttk.Frame(canvas)
-    canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-    canvas.pack(side="left", fill="both", expand=True)
-
-    root.mainloop()
-
-if __name__ == "__main__":
-    create_gui()
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    win = MainWindow()
+    win.show()
+    sys.exit(app.exec_())
