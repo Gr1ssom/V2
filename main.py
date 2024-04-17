@@ -100,7 +100,7 @@ def refresh_orders(scrollable_frame):
 def create_gui():
     global root, pin_entry
     root = tk.Tk()
-    root.title("LeafLink Order Viewer")
+    root.title("LeafLink Order Viewer by Grissom")
     root.geometry('1200x800')  # Adjust size as needed
 
     tk.Label(root, text="Enter PIN:", font=('Helvetica', 14, 'bold')).pack(pady=10)
