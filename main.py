@@ -101,7 +101,11 @@ def create_gui():
     global root, pin_entry
     root = tk.Tk()
     root.title("LeafLink Order Viewer by Grissom")
-    root.geometry('1200x800')  # Adjust size as needed
+
+    # Set the window size to 80% of 1920x1080
+    window_width = int(root.winfo_screenwidth() * 0.8)
+    window_height = int(root.winfo_screenheight() * 0.8)
+    root.geometry(f'{window_width}x{window_height}')  # Adjust size as needed
 
     tk.Label(root, text="Enter PIN:", font=('Helvetica', 14, 'bold')).pack(pady=10)
     pin_entry = tk.Entry(root, font=('Helvetica', 14), show="*")
@@ -123,6 +127,9 @@ def create_gui():
     scrollable_frame = ttk.Frame(canvas)
     canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
     canvas.pack(side="left", fill="both", expand=True)
+
+    # Configure the treeview widget to expand when the window size changes
+    scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
 
     root.mainloop()
 
