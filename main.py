@@ -22,7 +22,7 @@ def populate_treeview(orders, scrollable_frame):
         tk.Label(order_frame, text=f"Buyer: {buyer_name} - ID: {buyer_id}", font=('Helvetica', 16, 'bold')).pack(side="top", fill="x")
 
         # Treeview for line items
-        columns = ('SKU', 'Ship Tag', 'Product Name', 'Unit Multiplier', 'Base 3.50', 'Base 7.00', 'Base 28.00', 'Base 448.00', 'Is Sample', 'Quantity')
+        columns = ('SKU', 'Ship Tag', 'Product Name', 'Unit Multiplier', 'Base 3.50', 'Base 7.00', 'Base 28.00', 'Base 448.00', 'Is Sample')
         tree = ttk.Treeview(order_frame, columns=columns, show="headings", height=5)
         for col in columns:
             tree.heading(col, text=col)
@@ -32,7 +32,6 @@ def populate_treeview(orders, scrollable_frame):
         # Populate tree with line items
         for item in order.get("line_items", []):
             product_info = item.get("frozen_data", {}).get("product", {})
-            quantity = item.get("quantity", "N/A")
             is_sample = "Yes" if item.get("is_sample", False) else "No"
 
             # Initialize empty strings for specialized base unit columns
@@ -42,13 +41,13 @@ def populate_treeview(orders, scrollable_frame):
             # Check base units and format quantity without decimals
             base_units = float(product_info.get('base_units_per_unit', 0))
             if base_units == 3.50:
-                base_3_50 = str(int(float(quantity))) if quantity != "N/A" else "-"
+                base_3_50 = str(int(float(item.get("quantity", "N/A")))) if item.get("quantity", "N/A") != "N/A" else "-"
             elif base_units == 7.00:
-                base_7_00 = str(int(float(quantity))) if quantity != "N/A" else "-"
+                base_7_00 = str(int(float(item.get("quantity", "N/A")))) if item.get("quantity", "N/A") != "N/A" else "-"
             elif base_units == 28.00:
-                base_28_00 = str(int(float(quantity))) if quantity != "N/A" else "-"
+                base_28_00 = str(int(float(item.get("quantity", "N/A")))) if item.get("quantity", "N/A") != "N/A" else "-"
             elif base_units == 448.00:
-                base_448_00 = str(int(float(quantity))) if quantity != "N/A" else "-"
+                base_448_00 = str(int(float(item.get("quantity", "N/A")))) if item.get("quantity", "N/A") != "N/A" else "-"
 
             # Format all columns to show '-' if they are empty
             values = (
@@ -60,8 +59,7 @@ def populate_treeview(orders, scrollable_frame):
                 base_7_00 or "-",
                 base_28_00 or "-",
                 base_448_00 or "-",
-                is_sample,
-                str(int(float(quantity))) if quantity != "N/A" else "-"
+                is_sample
             )
 
             tree.insert('', 'end', values=values)
