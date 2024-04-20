@@ -52,7 +52,6 @@ def populate_treeview(orders, scrollable_frame):
             elif base_units == 448.00:
                 base_448_00 = str(int(float(item.get("quantity", "N/A")))) if item.get("quantity", "N/A") != "N/A" else "-"
 
-            # Format all columns to show '-' if they are empty
             values = (
                 product_info.get("sku", "N/A") or "-",
                 "",  # Ship Tag left empty
@@ -88,6 +87,7 @@ def validate_pin(scrollable_frame):
         orders = fetch_orders()
         if orders:
             populate_treeview(orders, scrollable_frame)
+            refresh_button.pack(pady=10)  # Show the refresh button after successful PIN validation
         else:
             messagebox.showinfo("Information", "No submitted orders to process.")
     else:
@@ -102,14 +102,14 @@ def refresh_orders(scrollable_frame):
         messagebox.showinfo("Information", "No new submitted orders to process.")
 
 def create_gui():
-    global root, pin_entry
+    global root, pin_entry, refresh_button
     root = tk.Tk()
     root.title("LeafLink Order Viewer by Grissom")
 
     # Set the window size to 80% of 1920x1080
     window_width = int(root.winfo_screenwidth() * 0.8)
     window_height = int(root.winfo_screenheight() * 0.8)
-    root.geometry(f'{window_width}x{window_height}')  # Adjust size as needed
+    root.geometry(f'{window_width}x{window_height}')
 
     tk.Label(root, text="Enter PIN:", font=('Helvetica', 14, 'bold')).pack(pady=10)
     pin_entry = tk.Entry(root, font=('Helvetica', 14), show="*")
@@ -121,6 +121,7 @@ def create_gui():
     # Refresh button setup
     refresh_button = tk.Button(root, text="Refresh", command=lambda: refresh_orders(scrollable_frame))
     refresh_button.pack(pady=10)
+    refresh_button.pack_forget()  # Initially hide the refresh button
 
     # Scrollable frame setup
     canvas = tk.Canvas(root)
