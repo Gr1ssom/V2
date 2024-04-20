@@ -22,7 +22,7 @@ def populate_treeview(orders, scrollable_frame):
         tk.Label(order_frame, text=f"Buyer: {buyer_name} - ID: {buyer_id}", font=('Helvetica', 16, 'bold')).pack(side="top", fill="x")
 
         # Treeview for line items
-        columns = ('SKU', 'Ship Tag', 'Product Name', 'Unit Multiplier', 'Base 3.50', 'Base 7.00', 'Base 28.00', 'Base 448.00', 'Is Sample')
+        columns = ('SKU', 'Ship Tag', 'Product Name', 'Base 1', 'Base 2.5','Base 3.50', 'Base 7.00', 'Base 28.00', 'Base 448.00', 'Is Sample')
         tree = ttk.Treeview(order_frame, columns=columns, show="headings", height=5)
         for col in columns:
             tree.heading(col, text=col)
@@ -35,13 +35,16 @@ def populate_treeview(orders, scrollable_frame):
             is_sample = "Yes" if item.get("is_sample", False) else "No"
 
             # Initialize empty strings for specialized base unit columns
-            base_3_50 = base_7_00 = base_28_00 = base_448_00 = ""
-            unit_multiplier_display = item.get("unit_multiplier", "-")  # Default display value for unit multiplier
+            base_1_00 = base_2_50 = base_3_50 = base_7_00 = base_28_00 = base_448_00 = ""
 
             # Check base units and format quantity without decimals
             base_units = float(product_info.get('base_units_per_unit', 0))
-            if base_units == 3.50:
-                base_3_50 = str(int(float(item.get("quantity", "N/A")))) if item.get("quantity", "N/A") != "N/A" else "-"
+            if base_units == 1.00:
+                base_1_00 = str(int(float(item.get("quantity", "N/A")))) if item.get("quantity", "N/A") != "N/A" else "-"
+            elif base_units == 2.50:
+                base_2_50 = str(int(float(item.get("quantity", "N/A")))) if item.get("quantity", "N/A") != "N/A" else "-"
+            elif base_units == 3.50:
+                base_3_50 = str(int(float(item.get("quantity", "N/A")))) if item.get("quantity", "N/A") != "N/A" else "-"    
             elif base_units == 7.00:
                 base_7_00 = str(int(float(item.get("quantity", "N/A")))) if item.get("quantity", "N/A") != "N/A" else "-"
             elif base_units == 28.00:
@@ -54,7 +57,8 @@ def populate_treeview(orders, scrollable_frame):
                 product_info.get("sku", "N/A") or "-",
                 "",  # Ship Tag left empty
                 product_info.get("name", "N/A") or "-",
-                unit_multiplier_display,
+                base_1_00 or "-",
+                base_2_50 or "-",
                 base_3_50 or "-",
                 base_7_00 or "-",
                 base_28_00 or "-",
