@@ -5,9 +5,9 @@ from leaflink_api import fetch_orders
 # Constants
 CORRECT_PIN = '1234'
 
-def populate_treeview(orders, scrollable_frame):
+def populate_treeview(orders):
     """Populates the treeview with detailed order and line item data in separate sections, each with a copy button."""
-    for widget in scrollable_frame.winfo_children():
+    for widget in main_frame.winfo_children():
         widget.destroy()  # Clear previous widgets
 
     for order in orders:
@@ -15,38 +15,65 @@ def populate_treeview(orders, scrollable_frame):
         buyer_id = order.get("customer", {}).get("id", "N/A")
 
         # Create a frame for each order
-        order_frame = ttk.Frame(scrollable_frame, padding="10")
+        order_frame = ttk.Frame(main_frame, padding="10")
         order_frame.pack(fill='x', expand=True, padx=10, pady=10, anchor="n")
 
         # Order header
         tk.Label(order_frame, text=f"Buyer: {buyer_name} - ID: {buyer_id}", font=('Helvetica', 16, 'bold')).pack(side="top", fill="x")
 
         # Treeview for line items
-        columns = ('SKU', 'Ship Tag', 'Product Name', 'Base 1', 'Base 2.5','Base 3.50', 'Base 7.00', 'Base 28.00', 'Base 448.00', 'Is Sample')
-        tree = ttk.Treeview(order_frame, columns=columns, show="headings", height=5)
+        columns = ('SRC PKG', 'PKG TAG', 'ITEM NAME', '0.5G', '1G/2PK', '5PK', '3.5G', '7G', '28G', '1LB', 'SAMPLES', 'QTY 1', 'QTY 2', 'PRICE')
+        tree = ttk.Treeview(order_frame, columns=columns, show="headings")
         for col in columns:
             tree.heading(col, text=col)
-            tree.column(col, anchor="center", stretch=tk.YES)  # Allow columns to stretch
+            if col == 'ITEM NAME':
+                tree.column(col, anchor="center", stretch=tk.YES, width=200)  # Wider column for ITEM NAME
+            else:
+                tree.column(col, anchor="center", stretch=tk.YES, width=100)  # Default width for other columns
+
+        # Define tag for samples
+        tree.tag_configure('sample', background='lightblue')
+
+        # Adding the scrollbar
+        scrollbar = ttk.Scrollbar(order_frame, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+
         tree.pack(expand=True, fill='both')
 
         # Populate tree with line items
         for item in order.get("line_items", []):
             product_info = item.get("frozen_data", {}).get("product", {})
             is_sample = "Yes" if item.get("is_sample", False) else "No"
+            if is_sample == "Yes":
+                price = "$0.01"
+            else:
+                sale_price = item.get("sale_price", {}).get("amount", 0)
+                price = f"${sale_price:.2f}" if sale_price > 0 else f"${item.get('ordered_unit_price', {}).get('amount', 0):.2f}"
 
             # Initialize empty strings for specialized base unit columns
-            base_1_00 = base_2_50 = base_3_50 = base_7_00 = base_28_00 = base_448_00 = ""
+            base_0_5g = base_1_00 = base_2_5g = base_3_50 = base_7_00 = base_28_00 = base_448_00 = ""
 
             # Check base units and format quantity without decimals
             base_units = float(product_info.get('base_units_per_unit', 0))
-            if base_units == 1.00:
+            calculated_qty_1 = ""
+            calculated_qty_2 = ""
+            if base_units == 0.5:
+                base_0_5g = str(int(float(item.get("quantity", "N/A")))) if item.get("quantity", "N/A") != "N/A" else "-"
+            elif base_units == 1.00:
                 base_1_00 = str(int(float(item.get("quantity", "N/A")))) if item.get("quantity", "N/A") != "N/A" else "-"
-            elif base_units == 2.50:
-                base_2_50 = str(int(float(item.get("quantity", "N/A")))) if item.get("quantity", "N/A") != "N/A" else "-"
+            elif base_units == 2.5:
+                base_2_5g = str(int(float(item.get("quantity", "N/A")))) if item.get("quantity", "N/A") != "N/A" else "-"
             elif base_units == 3.50:
-                base_3_50 = str(int(float(item.get("quantity", "N/A")))) if item.get("quantity", "N/A") != "N/A" else "-"    
+                base_3_50 = str(int(float(item.get("quantity", "N/A")))) if item.get("quantity", "N/A") != "N/A" else "-"
+                calculated_qty_1 = str(float(item.get("quantity", 0)) * 3.6)
+                calculated_qty_2 = str(float(item.get("quantity", 0)) * 3.5)
             elif base_units == 7.00:
                 base_7_00 = str(int(float(item.get("quantity", "N/A")))) if item.get("quantity", "N/A") != "N/A" else "-"
+                if calculated_qty_1 == "":
+                    calculated_qty_1 = str(float(item.get("quantity", 0)) * 7.2)
+                if calculated_qty_2 == "":
+                    calculated_qty_2 = str(float(item.get("quantity", 0)) * 7.0)
             elif base_units == 28.00:
                 base_28_00 = str(int(float(item.get("quantity", "N/A")))) if item.get("quantity", "N/A") != "N/A" else "-"
             elif base_units == 448.00:
@@ -54,18 +81,26 @@ def populate_treeview(orders, scrollable_frame):
 
             values = (
                 product_info.get("sku", "N/A") or "-",
-                "",  # Ship Tag left empty
+                "",  # PKG TAG left empty
                 product_info.get("name", "N/A") or "-",
+                base_0_5g or "-",
                 base_1_00 or "-",
-                base_2_50 or "-",
+                base_2_5g or "-",
                 base_3_50 or "-",
                 base_7_00 or "-",
                 base_28_00 or "-",
                 base_448_00 or "-",
-                is_sample
+                is_sample,
+                calculated_qty_1 or "-",
+                calculated_qty_2 or "-",
+                price
             )
 
-            tree.insert('', 'end', values=values)
+            # Insert item with sample tag if applicable
+            if item.get("is_sample", False):
+                tree.insert('', 'end', values=values, tags=('sample',))
+            else:
+                tree.insert('', 'end', values=values)
 
         # Copy to Clipboard Button for this order
         copy_button = tk.Button(order_frame, text="Copy Order to Clipboard", command=lambda tr=tree: copy_to_clipboard(tr))
@@ -80,29 +115,32 @@ def copy_to_clipboard(tree):
     root.clipboard_append(clipboard_data)
     messagebox.showinfo("Success", "All order data copied to clipboard!")
 
-def validate_pin(scrollable_frame):
+def validate_pin():
     """Validates the entered PIN and fetches data if correct."""
     entered_pin = pin_entry.get()
     if entered_pin == CORRECT_PIN:
+        pin_label.pack_forget()
+        pin_entry.pack_forget()
+        submit_button.pack_forget()
+        refresh_button.pack(pady=10)  # Show the refresh button after successful PIN validation
         orders = fetch_orders()
         if orders:
-            populate_treeview(orders, scrollable_frame)
-            refresh_button.pack(pady=10)  # Show the refresh button after successful PIN validation
+            populate_treeview(orders)
         else:
             messagebox.showinfo("Information", "No submitted orders to process.")
     else:
         messagebox.showerror("Error", "Invalid PIN")
 
-def refresh_orders(scrollable_frame):
+def refresh_orders():
     """Refreshes and fetches new orders to display."""
     orders = fetch_orders()
     if orders:
-        populate_treeview(orders, scrollable_frame)
+        populate_treeview(orders)
     else:
         messagebox.showinfo("Information", "No new submitted orders to process.")
 
 def create_gui():
-    global root, pin_entry, refresh_button
+    global root, pin_label, pin_entry, submit_button, refresh_button, main_frame
     root = tk.Tk()
     root.title("LeafLink Order Viewer by Grissom")
 
@@ -111,30 +149,33 @@ def create_gui():
     window_height = int(root.winfo_screenheight() * 0.8)
     root.geometry(f'{window_width}x{window_height}')
 
-    tk.Label(root, text="Enter PIN:", font=('Helvetica', 14, 'bold')).pack(pady=10)
+    pin_label = tk.Label(root, text="Enter PIN:", font=('Helvetica', 14, 'bold'))
+    pin_label.pack(pady=10)
     pin_entry = tk.Entry(root, font=('Helvetica', 14), show="*")
     pin_entry.pack(pady=5)
 
-    submit_button = tk.Button(root, text="Submit", command=lambda: validate_pin(scrollable_frame))
+    submit_button = tk.Button(root, text="Submit", command=validate_pin)
     submit_button.pack(pady=10)
 
     # Refresh button setup
-    refresh_button = tk.Button(root, text="Refresh", command=lambda: refresh_orders(scrollable_frame))
-    refresh_button.pack(pady=10)
+    refresh_button = tk.Button(root, text="Refresh", command=refresh_orders)
     refresh_button.pack_forget()  # Initially hide the refresh button
 
-    # Scrollable frame setup
+    # Main frame setup with scrollbar
     canvas = tk.Canvas(root)
+    canvas.pack(side="left", fill="both", expand=True)
+    
     scrollbar = ttk.Scrollbar(root, orient="vertical", command=canvas.yview)
     scrollbar.pack(side="right", fill="y")
+
     canvas.configure(yscrollcommand=scrollbar.set)
+    main_frame = ttk.Frame(canvas)
+    canvas.create_window((0, 0), window=main_frame, anchor="nw")
 
-    scrollable_frame = ttk.Frame(canvas)
-    canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-    canvas.pack(side="left", fill="both", expand=True)
+    def on_frame_configure(event):
+        canvas.configure(scrollregion=canvas.bbox("all"))
 
-    # Configure the treeview widget to expand when the window size changes
-    scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+    main_frame.bind("<Configure>", on_frame_configure)
 
     root.mainloop()
 
