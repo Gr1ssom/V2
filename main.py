@@ -80,7 +80,7 @@ class OrderViewerApp:
 
             tk.Label(order_frame, text=f"Buyer: {buyer_name} - ID: {buyer_id}", font=('Helvetica', 16, 'bold')).pack(side="top", fill="x")
 
-            columns = ('SKU', 'Ship Tag', 'Product Name', 'Base 0.5g', 'Base 1', 'Base 2.5', 'Base 3.5', 'Base 5', 'Base 7.0', 'Base 28.0', 'Base 448.0', 'Is Sample', 'Calculated Qty 1', 'Calculated Qty 2', 'Price')
+            columns = ('SKU', 'Ship Tag', 'Product Name', 'Base 0.5g', 'Base 1', 'Base 2.5', 'Base 5', 'Base 3.5', 'Base 7.0', 'Base 28.0', 'Base 448.0', 'Is Sample', 'Calculated Qty 1', 'Calculated Qty 2', 'Price')
             tree = self.create_treeview(order_frame, columns)
             self.populate_tree(tree, order)
 
@@ -111,8 +111,10 @@ class OrderViewerApp:
             base_units = float(product_info.get('base_units_per_unit', 0))
             base_columns, calculated_qtys = self.calculate_base_units(base_units, item)
 
+            sku = product_info.get("sku", "N/A").lstrip('0') or "-"
+
             values = (
-                product_info.get("sku", "N/A") or "-",
+                sku,
                 "",  # Ship Tag left empty
                 product_info.get("name", "N/A") or "-",
                 *base_columns,
@@ -150,7 +152,7 @@ class OrderViewerApp:
         elif base_units == 448.00:
             base_448_00 = str(int(quantity))
 
-        base_columns = [base_0_5g or "-", base_1_00 or "-", base_2_5 or "-", base_3_50 or "-", base_5_00 or "-", base_7_00 or "-", base_28_00 or "-", base_448_00 or "-"]
+        base_columns = [base_0_5g or "-", base_1_00 or "-", base_2_5 or "-", base_5_00 or "-", base_3_50 or "-", base_7_00 or "-", base_28_00 or "-", base_448_00 or "-"]
         calculated_qtys = [calculated_qty_1 or "-", calculated_qty_2 or "-"]
 
         return base_columns, calculated_qtys
