@@ -80,7 +80,7 @@ class OrderViewerApp:
 
             tk.Label(order_frame, text=f"Buyer: {buyer_name} - ID: {buyer_id}", font=('Helvetica', 16, 'bold')).pack(side="top", fill="x")
 
-            columns = ('SKU', 'Ship Tag', 'Product Name', 'Base 0.5g', 'Base 1', 'Base 2.5', 'Base 5', 'Base 3.5', 'Base 7.0', 'Base 28.0', 'Base 448.0', 'Is Sample', 'Calculated Qty 1', 'Calculated Qty 2', 'Price')
+            columns = ('SKU', 'Ship Tag', 'Product Name', 'Base 0.5g', 'Base 1', 'Base 2.5', 'Base 5', 'Base 3.5', 'Base 7.0', 'Base 28.0', 'Base 448.0', 'Is Sample', 'Calculated Qty 1', 'Calculated Qty 2', 'Total Price')
             tree = self.create_treeview(order_frame, columns)
             self.populate_tree(tree, order)
 
@@ -106,7 +106,9 @@ class OrderViewerApp:
         for item in order.get("line_items", []):
             product_info = item.get("frozen_data", {}).get("product", {})
             is_sample = "Yes" if item.get("is_sample", False) else "No"
-            price = "$0.01" if is_sample == "Yes" else f"${item.get('sale_price', {}).get('amount', 0):.2f}"
+            unit_price = item.get('sale_price', {}).get('amount', 0)
+            quantity = float(item.get("quantity", 0))
+            total_price = "$0.01" if is_sample == "Yes" else f"${unit_price * quantity:.2f}"
 
             base_units = float(product_info.get('base_units_per_unit', 0))
             base_columns, calculated_qtys = self.calculate_base_units(base_units, item)
@@ -120,7 +122,7 @@ class OrderViewerApp:
                 *base_columns,
                 is_sample,
                 *calculated_qtys,
-                price
+                total_price
             )
 
             tree.insert('', 'end', values=values, tags=('sample',) if item.get("is_sample", False) else ())
