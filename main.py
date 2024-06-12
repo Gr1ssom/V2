@@ -73,14 +73,14 @@ class OrderViewerApp:
 
         for order in orders:
             buyer_name = order.get("customer", {}).get("display_name", "Unknown Buyer")
-            buyer_id = order.get("customer", {}).get("id", "N/A")
+            order_short_id = order.get("short_id", "N/A")
 
             order_frame = ttk.Frame(self.main_frame, padding="10")
             order_frame.pack(fill='x', expand=True, padx=10, pady=10, anchor="n")
 
-            tk.Label(order_frame, text=f"Buyer: {buyer_name} - ID: {buyer_id}", font=('Helvetica', 16, 'bold')).pack(side="top", fill="x")
+            tk.Label(order_frame, text=f"Buyer: {buyer_name} - Order Short ID: {order_short_id}", font=('Helvetica', 16, 'bold')).pack(side="top", fill="x")
 
-            columns = ('SKU', 'Ship Tag', 'Product Name', 'Base 0.5g', 'Base 1', 'Base 2.5', 'Base 5', 'Base 3.5', 'Base 7.0', 'Base 28.0', 'Base 448.0', 'Is Sample', 'Calculated Qty 1', 'Calculated Qty 2', 'Total Price')
+            columns = ('SKU', 'Ship Tag', 'Product Name', 'Base 0.5g', 'Base 1', 'Base 2.5', 'Base 3.5', 'Base 5', 'Base 7.0', 'Base 28.0', 'Base 448.0', 'Is Sample', 'Calculated Qty 1', 'Calculated Qty 2', 'Calculated Price')
             tree = self.create_treeview(order_frame, columns)
             self.populate_tree(tree, order)
 
@@ -106,9 +106,11 @@ class OrderViewerApp:
         for item in order.get("line_items", []):
             product_info = item.get("frozen_data", {}).get("product", {})
             is_sample = "Yes" if item.get("is_sample", False) else "No"
-            unit_price = item.get('sale_price', {}).get('amount', 0)
+            ordered_unit_price = item.get('ordered_unit_price', {}).get('amount', 0)
             quantity = float(item.get("quantity", 0))
-            total_price = "$0.01" if is_sample == "Yes" else f"${unit_price * quantity:.2f}"
+            bulk_units = item.get("bulk_units", 0)
+            price_per_unit = float(product_info.get("price", 0))
+            calculated_price = bulk_units * price_per_unit
 
             base_units = float(product_info.get('base_units_per_unit', 0))
             base_columns, calculated_qtys = self.calculate_base_units(base_units, item)
@@ -122,7 +124,7 @@ class OrderViewerApp:
                 *base_columns,
                 is_sample,
                 *calculated_qtys,
-                total_price
+                f"${calculated_price:.2f}"
             )
 
             tree.insert('', 'end', values=values, tags=('sample',) if item.get("is_sample", False) else ())
@@ -154,7 +156,7 @@ class OrderViewerApp:
         elif base_units == 448.00:
             base_448_00 = str(int(quantity))
 
-        base_columns = [base_0_5g or "-", base_1_00 or "-", base_2_5 or "-", base_5_00 or "-", base_3_50 or "-", base_7_00 or "-", base_28_00 or "-", base_448_00 or "-"]
+        base_columns = [base_0_5g or "-", base_1_00 or "-", base_2_5 or "-", base_3_50 or "-", base_5_00 or "-", base_7_00 or "-", base_28_00 or "-", base_448_00 or "-"]
         calculated_qtys = [calculated_qty_1 or "-", calculated_qty_2 or "-"]
 
         return base_columns, calculated_qtys
