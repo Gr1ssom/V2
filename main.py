@@ -1,47 +1,67 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from leaflink_api import fetch_orders
+import ttkbootstrap as tb
+from ttkbootstrap.constants import *
 
 # Constants
 CORRECT_PIN = '1234'
+ORDER_STATUSES = ["Submitted", "Accepted"]  # Adjusted to match API expected values
 
 class OrderViewerApp:
     def __init__(self, root):
         self.root = root
         self.root.title("LeafLink Order Viewer by Grissom")
         
-        self.window_width = int(self.root.winfo_screenwidth() * 0.8)
-        self.window_height = int(self.root.winfo_screenheight() * 0.8)
+        self.window_width = int(self.root.winfo_screenwidth() * 0.9)
+        self.window_height = int(self.root.winfo_screenheight() * 0.9)
         self.root.geometry(f'{self.window_width}x{self.window_height}')
+        
+        self.style = tb.Style(theme='flatly')  # Choose a theme
 
         self.create_widgets()
 
     def create_widgets(self):
-        self.pin_label = tk.Label(self.root, text="Enter PIN:", font=('Helvetica', 14, 'bold'))
-        self.pin_label.pack(pady=10)
-        self.pin_entry = tk.Entry(self.root, font=('Helvetica', 14), show="*")
-        self.pin_entry.pack(pady=5)
+        self.top_frame = ttk.Frame(self.root, padding=20)
+        self.top_frame.pack(expand=False, fill=BOTH)
         
-        self.submit_button = tk.Button(self.root, text="Submit", command=self.validate_pin)
-        self.submit_button.pack(pady=10)
-        
-        self.refresh_button = tk.Button(self.root, text="Refresh", command=self.refresh_orders)
-        self.refresh_button.pack_forget()
-        
-        self.create_main_frame()
+        self.main_frame = ttk.Frame(self.root, padding=20)
+        self.main_frame.pack(expand=True, fill=BOTH)
 
-    def create_main_frame(self):
-        self.canvas = tk.Canvas(self.root)
-        self.canvas.pack(side="left", fill="both", expand=True)
+        self.pin_label = ttk.Label(self.top_frame, text="Enter PIN:", font=('Helvetica', 14, 'bold'))
+        self.pin_label.grid(row=0, column=0, pady=10, padx=5)
+        
+        self.pin_entry = ttk.Entry(self.top_frame, font=('Helvetica', 14), show="*")
+        self.pin_entry.grid(row=1, column=0, pady=5, padx=5)
+        
+        self.submit_button = ttk.Button(self.top_frame, text="Submit", command=self.validate_pin, bootstyle=SUCCESS)
+        self.submit_button.grid(row=2, column=0, pady=10, padx=5)
+        
+        self.order_status_var = tk.StringVar(value=ORDER_STATUSES[0])
+        self.order_status_dropdown = ttk.Combobox(self.top_frame, textvariable=self.order_status_var, values=ORDER_STATUSES)
+        self.order_status_dropdown.grid(row=3, column=0, pady=10, padx=5)
+        self.order_status_dropdown.bind("<<ComboboxSelected>>", self.refresh_orders)
+        
+        self.refresh_button = ttk.Button(self.top_frame, text="Refresh", command=self.refresh_orders, bootstyle=INFO)
+        self.refresh_button.grid(row=4, column=0, pady=10, padx=5)
+        self.refresh_button.grid_remove()
+        
+        self.top_frame.grid_columnconfigure(0, weight=1)
 
-        self.scrollbar = ttk.Scrollbar(self.root, orient="vertical", command=self.canvas.yview)
-        self.scrollbar.pack(side="right", fill="y")
+        self.create_main_frame(self.main_frame)
+
+    def create_main_frame(self, parent):
+        self.canvas = tk.Canvas(parent)
+        self.canvas.pack(side=LEFT, fill=BOTH, expand=True)
+
+        self.scrollbar = ttk.Scrollbar(parent, orient="vertical", command=self.canvas.yview)
+        self.scrollbar.pack(side=RIGHT, fill=Y)
 
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
-        self.main_frame = ttk.Frame(self.canvas)
-        self.canvas.create_window((0, 0), window=self.main_frame, anchor="nw")
+        self.main_frame_inner = ttk.Frame(self.canvas)
+        self.canvas.create_window((0, 0), window=self.main_frame_inner, anchor="nw")
 
-        self.main_frame.bind("<Configure>", self.on_frame_configure)
+        self.main_frame_inner.bind("<Configure>", self.on_frame_configure)
 
     def on_frame_configure(self, event):
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
@@ -49,42 +69,44 @@ class OrderViewerApp:
     def validate_pin(self):
         entered_pin = self.pin_entry.get()
         if entered_pin == CORRECT_PIN:
-            self.pin_label.pack_forget()
-            self.pin_entry.pack_forget()
-            self.submit_button.pack_forget()
-            self.refresh_button.pack(pady=10)
+            self.pin_label.grid_remove()
+            self.pin_entry.grid_remove()
+            self.submit_button.grid_remove()
+            self.refresh_button.grid()
+            self.order_status_dropdown.grid()
             self.load_orders()
         else:
             messagebox.showerror("Error", "Invalid PIN")
 
     def load_orders(self):
-        orders = fetch_orders()
+        status = self.order_status_var.get()
+        orders = fetch_orders(status)  # Pass the selected status to fetch_orders
         if orders:
             self.populate_treeview(orders)
         else:
-            messagebox.showinfo("Information", "No submitted orders to process.")
+            messagebox.showinfo("Information", f"No {status.lower()} orders to process.")
 
-    def refresh_orders(self):
+    def refresh_orders(self, event=None):
         self.load_orders()
 
     def populate_treeview(self, orders):
-        for widget in self.main_frame.winfo_children():
+        for widget in self.main_frame_inner.winfo_children():
             widget.destroy()
 
         for order in orders:
             buyer_name = order.get("customer", {}).get("display_name", "Unknown Buyer")
             order_short_id = order.get("short_id", "N/A")
 
-            order_frame = ttk.Frame(self.main_frame, padding="10")
+            order_frame = ttk.Frame(self.main_frame_inner, padding="10")
             order_frame.pack(fill='x', expand=True, padx=10, pady=10, anchor="n")
 
-            tk.Label(order_frame, text=f"Buyer: {buyer_name} - Order Short ID: {order_short_id}", font=('Helvetica', 16, 'bold')).pack(side="top", fill="x")
+            ttk.Label(order_frame, text=f"Buyer: {buyer_name} - Order Short ID: {order_short_id}", font=('Helvetica', 16, 'bold')).pack(side="top", fill="x")
 
             columns = ('SKU', 'Ship Tag', 'Product Name', 'Base 0.5g', 'Base 1', 'Base 2.5', 'Base 3.5', 'Base 5', 'Base 7.0', 'Base 28.0', 'Base 448.0', 'Is Sample', 'Calculated Qty 1', 'Calculated Qty 2', 'Calculated Price')
             tree = self.create_treeview(order_frame, columns)
             self.populate_tree(tree, order)
 
-            copy_button = tk.Button(order_frame, text="Copy Order to Clipboard", command=lambda tr=tree: self.copy_to_clipboard(tr))
+            copy_button = ttk.Button(order_frame, text="Copy Order to Clipboard", command=lambda tr=tree: self.copy_to_clipboard(tr), bootstyle=PRIMARY)
             copy_button.pack(pady=10)
 
     def create_treeview(self, parent, columns):
