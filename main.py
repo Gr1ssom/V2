@@ -6,6 +6,7 @@ from ttkbootstrap.constants import *
 from PIL import Image, ImageTk
 import os
 from datetime import datetime
+from collections import defaultdict
 
 # Constants
 CORRECT_PIN = '1234'
@@ -74,6 +75,19 @@ class OrderViewerApp:
             print(f"Error loading logo: {e}")
 
     def create_main_frame(self, parent):
+        self.notebook = ttk.Notebook(parent)
+        self.notebook.pack(expand=True, fill=BOTH)
+
+        self.orders_tab = ttk.Frame(self.notebook)
+        self.sku_tab = ttk.Frame(self.notebook)
+
+        self.notebook.add(self.orders_tab, text="Orders")
+        self.notebook.add(self.sku_tab, text="SKU Summary")
+
+        self.create_orders_tab(self.orders_tab)
+        self.create_sku_tab(self.sku_tab)
+
+    def create_orders_tab(self, parent):
         self.canvas = tk.Canvas(parent)
         self.canvas.pack(side=LEFT, fill=BOTH, expand=True)
 
@@ -85,6 +99,16 @@ class OrderViewerApp:
         self.canvas.create_window((0, 0), window=self.main_frame_inner, anchor="nw")
 
         self.main_frame_inner.bind("<Configure>", self.on_frame_configure)
+
+    def create_sku_tab(self, parent):
+        self.sku_tree = ttk.Treeview(parent, columns=("SKU", "Strain", "Quantity"), show="headings")
+        self.sku_tree.heading("SKU", text="SKU")
+        self.sku_tree.heading("Strain", text="Strain")
+        self.sku_tree.heading("Quantity", text="Quantity")
+        self.sku_tree.pack(fill=BOTH, expand=True)
+        self.sku_scrollbar = ttk.Scrollbar(parent, orient="vertical", command=self.sku_tree.yview)
+        self.sku_tree.configure(yscrollcommand=self.sku_scrollbar.set)
+        self.sku_scrollbar.pack(side=RIGHT, fill=Y)
 
     def on_frame_configure(self, event):
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
@@ -107,6 +131,7 @@ class OrderViewerApp:
             orders = fetch_orders(status)  # Pass the selected status to fetch_orders
             if orders:
                 self.populate_treeview(orders)
+                self.populate_sku_summary(orders)
             else:
                 messagebox.showinfo("Information", f"No {status.lower()} orders to process.")
         except Exception as e:
@@ -136,7 +161,7 @@ class OrderViewerApp:
 
             ttk.Label(order_frame, text=f"Buyer: {buyer_name} - Order Short ID: {order_short_id} - Ship Date: {ship_date}", font=('Helvetica', 16, 'bold')).pack(side="top", fill="x")
 
-            columns = ('SKU', 'Ship Tag', 'Product Name', 'Base 0.5g', 'Base 1', 'Base 2.5', 'Base 3.5', 'Base 5', 'Base 7.0', 'Base 28.0', 'Base 448.0', 'Is Sample', 'Calculated Qty 1', 'Calculated Qty 2', 'Calculated Price')
+            columns = ('SKU', 'Ship Tag', 'Product Name', 'Quantity', 'Is Sample', 'Calculated Price', 'WT 1', 'WT 2')
             tree = self.create_treeview(order_frame, columns)
             self.populate_tree(tree, order)
 
@@ -165,60 +190,64 @@ class OrderViewerApp:
         for item in order.get("line_items", []):
             product_info = item.get("frozen_data", {}).get("product", {})
             is_sample = "Yes" if item.get("is_sample", False) else "No"
-            ordered_unit_price = item.get('ordered_unit_price', {}).get('amount', 0)
             quantity = float(item.get("quantity", 0))
-            bulk_units = item.get("bulk_units", 0)
-            price_per_unit = float(product_info.get("price", 0))
-            calculated_price = bulk_units * price_per_unit
-
-            base_units = float(product_info.get('base_units_per_unit', 0))
-            base_columns, calculated_qtys = self.calculate_base_units(base_units, item)
+            
+            # Get the appropriate price for calculation
+            price_per_unit = float(product_info.get("sale_price", product_info.get("price", 0)))
+            calculated_price = quantity * price_per_unit
 
             sku = product_info.get("sku", "N/A").lstrip('0') or "-"
+            product_name = product_info.get("name", "N/A") or "-"
+            base_units = float(product_info.get('base_units_per_unit', 0))
+
+            wt1 = wt2 = ""
+
+            # Apply the rules based on the base units
+            if base_units == 3.5:
+                wt1 = quantity * 3.5
+                wt2 = quantity * 3.6
+            elif base_units == 7.0:
+                wt1 = quantity * 7.0
+                wt2 = quantity * 7.2
+            elif base_units == 1.0:
+                wt1 = quantity * 1.0
+                wt2 = quantity * 1.05
+
+            # Format values to remove trailing zeros
+            wt1 = f"{wt1:.2f}".rstrip('0').rstrip('.') if wt1 else ""
+            wt2 = f"{wt2:.2f}".rstrip('0').rstrip('.') if wt2 else ""
+            calculated_price = f"{calculated_price:.2f}".rstrip('0').rstrip('.') if calculated_price else ""
 
             values = (
                 sku,
                 "",  # Ship Tag left empty
-                product_info.get("name", "N/A") or "-",
-                *base_columns,
+                product_name,
+                str(quantity),  # Quantity
                 is_sample,
-                *calculated_qtys,
-                f"${calculated_price:.2f}"
+                f"${calculated_price}",
+                wt1,
+                wt2
             )
-
+            
             tree.insert('', 'end', values=values, tags=('sample',) if item.get("is_sample", False) else ())
 
-    def calculate_base_units(self, base_units, item):
-        base_dict = {
-            0.5: 'Base 0.5g',
-            1.00: 'Base 1',
-            2.5: 'Base 2.5',
-            3.50: 'Base 3.5',
-            5.00: 'Base 5',
-            7.00: 'Base 7.0',
-            28.00: 'Base 28.0',
-            448.00: 'Base 448.0'
-        }
-
-        base_columns = {k: "" for k in base_dict.values()}
-        calculated_qty_1 = calculated_qty_2 = ""
-
-        quantity = float(item.get("quantity", "N/A")) if item.get("quantity", "N/A") != "N/A" else 0
-
-        if base_units in base_dict:
-            base_columns[base_dict[base_units]] = str(int(quantity))
-
-        if base_units == 3.50:
-            calculated_qty_1 = str(quantity * 3.6)
-            calculated_qty_2 = str(quantity * 3.5)
-        elif base_units == 7.00:
-            calculated_qty_1 = str(quantity * 7.2)
-            calculated_qty_2 = str(quantity * 7.0)
-
-        base_columns_list = [base_columns[key] or "-" for key in base_dict.values()]
-        calculated_qtys = [calculated_qty_1 or "-", calculated_qty_2 or "-"]
-
-        return base_columns_list, calculated_qtys
+    def populate_sku_summary(self, orders):
+        sku_summary = defaultdict(lambda: {"strain": "", "quantity": 0})
+        
+        for order in orders:
+            for item in order.get("line_items", []):
+                product_info = item.get("frozen_data", {}).get("product", {})
+                sku = product_info.get("sku", "N/A").lstrip('0') or "-"
+                strain = product_info.get("name", "N/A") or "-"
+                quantity = float(item.get("quantity", 0))
+                
+                sku_summary[sku]["strain"] = strain
+                sku_summary[sku]["quantity"] += quantity
+        
+        self.sku_tree.delete(*self.sku_tree.get_children())  # Clear existing entries
+        
+        for sku, data in sku_summary.items():
+            self.sku_tree.insert("", "end", values=(sku, data["strain"], data["quantity"]))
 
     def copy_to_clipboard(self, tree):
         tree.selection_set(tree.get_children())
