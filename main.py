@@ -161,7 +161,7 @@ class OrderViewerApp:
 
             ttk.Label(order_frame, text=f"Buyer: {buyer_name} - Order Short ID: {order_short_id} - Ship Date: {ship_date}", font=('Helvetica', 16, 'bold')).pack(side="top", fill="x")
 
-            columns = ('SKU', 'Ship Tag', 'Product Name', 'Quantity', 'Is Sample', 'Calculated Price', 'WT 1', 'WT 2')
+            columns = ('SKU', 'Ship Tag', 'Product Name', 'Quantity', 'Is Sample', 'Price', 'WT 1', 'WT 2')
             tree = self.create_treeview(order_frame, columns)
             self.populate_tree(tree, order)
 
@@ -192,9 +192,13 @@ class OrderViewerApp:
             is_sample = "Yes" if item.get("is_sample", False) else "No"
             quantity = float(item.get("quantity", 0))
             
-            # Get the appropriate price for calculation
-            price_per_unit = float(product_info.get("sale_price", product_info.get("price", 0)))
-            calculated_price = quantity * price_per_unit
+            # Determine the price
+            if is_sample == "Yes":
+                price = 0.01 * quantity
+            else:
+                sale_price = float(product_info.get("sale_price", 0))
+                wholesale_price = float(product_info.get("wholesale_price", 0))
+                price = sale_price if sale_price > 0 else wholesale_price
 
             sku = product_info.get("sku", "N/A").lstrip('0') or "-"
             product_name = product_info.get("name", "N/A") or "-"
@@ -216,7 +220,7 @@ class OrderViewerApp:
             # Format values to remove trailing zeros
             wt1 = f"{wt1:.2f}".rstrip('0').rstrip('.') if wt1 else ""
             wt2 = f"{wt2:.2f}".rstrip('0').rstrip('.') if wt2 else ""
-            calculated_price = f"{calculated_price:.2f}".rstrip('0').rstrip('.') if calculated_price else ""
+            price = f"{price:.2f}".rstrip('0').rstrip('.') if price else ""
 
             values = (
                 sku,
@@ -224,7 +228,7 @@ class OrderViewerApp:
                 product_name,
                 str(quantity),  # Quantity
                 is_sample,
-                f"${calculated_price}",
+                f"${price}",
                 wt1,
                 wt2
             )
@@ -255,7 +259,6 @@ class OrderViewerApp:
         clipboard_data = '\n'.join('\t'.join(tree.item(item, 'values')) for item in selected_items)
         self.root.clipboard_clear()
         self.root.clipboard_append(clipboard_data)
-        messagebox.showinfo("Success", "All order data copied to clipboard!")
 
     def confirm_update_status(self, order_id):
         print(f"Updating order with ID: {order_id}")
