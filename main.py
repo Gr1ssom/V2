@@ -190,15 +190,27 @@ class OrderViewerApp:
         for item in order.get("line_items", []):
             product_info = item.get("frozen_data", {}).get("product", {})
             is_sample = "Yes" if item.get("is_sample", False) else "No"
-            quantity = float(item.get("quantity", 0))
-            
-            # Determine the price
-            if is_sample == "Yes":
-                price = 0.01 * quantity
+            quantity = float(item.get("quantity", 0))  # This is the number of units or portion of the case
+
+            # Retrieve prices
+            sale_price = float(product_info.get("sale_price", 0))
+            wholesale_price = float(product_info.get("wholesale_price", 0))
+            bulk_units = float(item.get("bulk_units", 1))  # Bulk units typically refer to the number of units per case
+
+            # Determine the base price (for the entire case)
+            price_per_case = sale_price if sale_price > 0 else wholesale_price
+
+            # Adjust price for partial cases
+            if quantity < bulk_units:
+                # If it's a partial case, calculate the prorated price
+                total_price = (price_per_case / bulk_units) * quantity
             else:
-                sale_price = float(product_info.get("sale_price", 0))
-                wholesale_price = float(product_info.get("wholesale_price", 0))
-                price = sale_price if sale_price > 0 else wholesale_price
+                # If it's a full case or multiple cases, the price is already for the full quantity
+                total_price = price_per_case
+
+            # Special handling for samples
+            if is_sample == "Yes":
+                total_price = 0.01 * quantity  # Nominal price for samples
 
             sku = product_info.get("sku", "N/A").lstrip('0') or "-"
             product_name = product_info.get("name", "N/A") or "-"
@@ -217,10 +229,10 @@ class OrderViewerApp:
                 wt1 = quantity * 1.0
                 wt2 = quantity * 1.05
 
-            # Format values to remove trailing zeros
+            # Format values to remove trailing zeros only when displaying the final result
             wt1 = f"{wt1:.2f}".rstrip('0').rstrip('.') if wt1 else ""
             wt2 = f"{wt2:.2f}".rstrip('0').rstrip('.') if wt2 else ""
-            price = f"{price:.2f}".rstrip('0').rstrip('.') if price else ""
+            total_price_str = f"${total_price:.2f}".rstrip('0').rstrip('.') if total_price else ""
 
             values = (
                 sku,
@@ -228,7 +240,7 @@ class OrderViewerApp:
                 product_name,
                 str(quantity),  # Quantity
                 is_sample,
-                f"${price}",
+                total_price_str,
                 wt1,
                 wt2
             )
