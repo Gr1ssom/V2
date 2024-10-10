@@ -6,11 +6,11 @@ from ttkbootstrap.constants import *
 from PIL import Image, ImageTk
 import os
 from datetime import datetime
-from collections import defaultdict
 
-# Constants
-CORRECT_PIN = '1234'
-ORDER_STATUSES = ["Submitted", "Accepted"]  # Adjusted to match API expected values
+# Fetch CORRECT_PIN from environment variable
+CORRECT_PIN = os.getenv('APP_PIN', '1234')
+
+ORDER_STATUSES = ["Submitted", "Accepted"]
 
 class OrderViewerApp:
     def __init__(self, root):
@@ -21,7 +21,7 @@ class OrderViewerApp:
         self.window_height = int(self.root.winfo_screenheight() * 0.9)
         self.root.geometry(f'{self.window_width}x{self.window_height}')
         
-        self.style = tb.Style(theme='flatly')  # Choose a theme
+        self.style = tb.Style(theme='flatly')
 
         self.create_widgets()
 
@@ -32,7 +32,6 @@ class OrderViewerApp:
         self.main_frame = ttk.Frame(self.root, padding=20)
         self.main_frame.pack(expand=True, fill=BOTH)
 
-        # Load and display the logo
         self.load_logo()
         
         self.pin_label = ttk.Label(self.top_frame, text="Enter PIN:", font=('Helvetica', 14, 'bold'))
@@ -58,19 +57,17 @@ class OrderViewerApp:
         self.create_main_frame(self.main_frame)
 
     def load_logo(self):
+        """Dynamically load and display the logo."""
+        image_path = os.path.join(os.getcwd(), "robust_logo.jpg")
+        if not os.path.exists(image_path):
+            print(f"Logo image not found at path: {image_path}")
+            return
         try:
-            # Ensure the path to the logo is correct
-            image_path = "/robust_logo.jpg"
-            if not os.path.exists(image_path):
-                print(f"Logo image not found at path: {image_path}")
-                return
-
             image = Image.open(image_path)
-            image = image.resize((200, 100), Image.ANTIALIAS)  # Resize the image
+            image = image.resize((200, 100), Image.Resampling.LANCZOS)
             self.logo = ImageTk.PhotoImage(image)
             logo_label = ttk.Label(self.top_frame, image=self.logo)
             logo_label.grid(row=0, column=0, pady=10, padx=5)
-            print("Logo loaded and displayed successfully.")
         except Exception as e:
             print(f"Error loading logo: {e}")
 
@@ -79,13 +76,9 @@ class OrderViewerApp:
         self.notebook.pack(expand=True, fill=BOTH)
 
         self.orders_tab = ttk.Frame(self.notebook)
-        self.sku_tab = ttk.Frame(self.notebook)
-
         self.notebook.add(self.orders_tab, text="Orders")
-        self.notebook.add(self.sku_tab, text="SKU Summary")
 
         self.create_orders_tab(self.orders_tab)
-        self.create_sku_tab(self.sku_tab)
 
     def create_orders_tab(self, parent):
         self.canvas = tk.Canvas(parent)
@@ -99,16 +92,6 @@ class OrderViewerApp:
         self.canvas.create_window((0, 0), window=self.main_frame_inner, anchor="nw")
 
         self.main_frame_inner.bind("<Configure>", self.on_frame_configure)
-
-    def create_sku_tab(self, parent):
-        self.sku_tree = ttk.Treeview(parent, columns=("SKU", "Strain", "Quantity"), show="headings")
-        self.sku_tree.heading("SKU", text="SKU")
-        self.sku_tree.heading("Strain", text="Strain")
-        self.sku_tree.heading("Quantity", text="Quantity")
-        self.sku_tree.pack(fill=BOTH, expand=True)
-        self.sku_scrollbar = ttk.Scrollbar(parent, orient="vertical", command=self.sku_tree.yview)
-        self.sku_tree.configure(yscrollcommand=self.sku_scrollbar.set)
-        self.sku_scrollbar.pack(side=RIGHT, fill=Y)
 
     def on_frame_configure(self, event):
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
@@ -126,12 +109,12 @@ class OrderViewerApp:
             messagebox.showerror("Error", "Invalid PIN")
 
     def load_orders(self):
+        """Load orders from the API and handle UI updates."""
         status = self.order_status_var.get()
         try:
-            orders = fetch_orders(status)  # Pass the selected status to fetch_orders
+            orders = fetch_orders(status)
             if orders:
                 self.populate_treeview(orders)
-                self.populate_sku_summary(orders)
             else:
                 messagebox.showinfo("Information", f"No {status.lower()} orders to process.")
         except Exception as e:
@@ -172,11 +155,11 @@ class OrderViewerApp:
             update_button.pack(pady=10, side=tk.RIGHT)
 
     def create_treeview(self, parent, columns):
+        """Utility function to create a Treeview widget with given columns."""
         tree = ttk.Treeview(parent, columns=columns, show="headings")
         for col in columns:
             tree.heading(col, text=col)
             tree.column(col, anchor="center", stretch=tk.YES, width=200 if col == 'Product Name' else 100)
-
         tree.tag_configure('sample', background='lightblue')
 
         scrollbar = ttk.Scrollbar(parent, orient="vertical", command=tree.yview)
@@ -190,55 +173,53 @@ class OrderViewerApp:
         for item in order.get("line_items", []):
             product_info = item.get("frozen_data", {}).get("product", {})
             is_sample = "Yes" if item.get("is_sample", False) else "No"
-            quantity = float(item.get("quantity", 0))  # This is the number of units or portion of the case
+            quantity = float(item.get("quantity", 0))
 
-            # Retrieve prices
-            sale_price = float(product_info.get("sale_price", 0))
-            wholesale_price = float(product_info.get("wholesale_price", 0))
-            bulk_units = float(item.get("bulk_units", 1))  # Bulk units typically refer to the number of units per case
+            # Use sale_price if it's greater than 0, otherwise use ordered_unit_price
+            sale_price = float(item.get("sale_price", {}).get("amount", 0))
+            ordered_unit_price = float(item.get("ordered_unit_price", {}).get("amount", 0))
 
-            # Determine the base price (for the entire case)
-            price_per_case = sale_price if sale_price > 0 else wholesale_price
+            # Get the price per unit (sale price takes priority)
+            price_per_unit = sale_price if sale_price > 0 else ordered_unit_price
 
-            # Adjust price for partial cases
-            if quantity < bulk_units:
-                # If it's a partial case, calculate the prorated price
-                total_price = (price_per_case / bulk_units) * quantity
-            else:
-                # If it's a full case or multiple cases, the price is already for the full quantity
-                total_price = price_per_case
+            # Get the unit multiplier
+            unit_multiplier = float(item.get("unit_multiplier", 1))  # Default to 1 if not provided
 
-            # Special handling for samples
+            # Calculate total units (cases being sold)
+            total_units = quantity / unit_multiplier  # This gives the number of cases sold
+
+            # Calculate the total price based on the total units sold
+            total_price = total_units * price_per_unit
+
+            # Adjust price for samples (samples should be priced at 0.01 per unit)
             if is_sample == "Yes":
-                total_price = 0.01 * quantity  # Nominal price for samples
+                total_price = 0.01 * quantity
 
+            # Formatting product info and weights
             sku = product_info.get("sku", "N/A").lstrip('0') or "-"
             product_name = product_info.get("name", "N/A") or "-"
             base_units = float(product_info.get('base_units_per_unit', 0))
 
             wt1 = wt2 = ""
 
-            # Apply the rules based on the base units
+            # Weight calculations based on base units
             if base_units == 3.5:
                 wt1 = quantity * 3.5
                 wt2 = quantity * 3.6
             elif base_units == 7.0:
                 wt1 = quantity * 7.0
                 wt2 = quantity * 7.2
-            elif base_units == 1.0:
-                wt1 = quantity * 1.0
-                wt2 = quantity * 1.05
 
-            # Format values to remove trailing zeros only when displaying the final result
             wt1 = f"{wt1:.2f}".rstrip('0').rstrip('.') if wt1 else ""
             wt2 = f"{wt2:.2f}".rstrip('0').rstrip('.') if wt2 else ""
             total_price_str = f"${total_price:.2f}".rstrip('0').rstrip('.') if total_price else ""
 
+            # Insert data into the treeview
             values = (
                 sku,
-                "",  # Ship Tag left empty
+                "",
                 product_name,
-                str(quantity),  # Quantity
+                str(quantity),
                 is_sample,
                 total_price_str,
                 wt1,
@@ -246,24 +227,6 @@ class OrderViewerApp:
             )
             
             tree.insert('', 'end', values=values, tags=('sample',) if item.get("is_sample", False) else ())
-
-    def populate_sku_summary(self, orders):
-        sku_summary = defaultdict(lambda: {"strain": "", "quantity": 0})
-        
-        for order in orders:
-            for item in order.get("line_items", []):
-                product_info = item.get("frozen_data", {}).get("product", {})
-                sku = product_info.get("sku", "N/A").lstrip('0') or "-"
-                strain = product_info.get("name", "N/A") or "-"
-                quantity = float(item.get("quantity", 0))
-                
-                sku_summary[sku]["strain"] = strain
-                sku_summary[sku]["quantity"] += quantity
-        
-        self.sku_tree.delete(*self.sku_tree.get_children())  # Clear existing entries
-        
-        for sku, data in sku_summary.items():
-            self.sku_tree.insert("", "end", values=(sku, data["strain"], data["quantity"]))
 
     def copy_to_clipboard(self, tree):
         tree.selection_set(tree.get_children())
@@ -273,7 +236,6 @@ class OrderViewerApp:
         self.root.clipboard_append(clipboard_data)
 
     def confirm_update_status(self, order_id):
-        print(f"Updating order with ID: {order_id}")
         if messagebox.askyesno("Confirmation", "Are you sure you want to update the order status to 'Accepted'?"):
             self.update_order_status(order_id)
 
