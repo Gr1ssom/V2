@@ -10,7 +10,7 @@ from datetime import datetime
 # Fetch CORRECT_PIN from environment variable
 CORRECT_PIN = os.getenv('APP_PIN', '1234')
 
-ORDER_STATUSES = ["Submitted", "Accepted"]
+ORDER_STATUSES = ["Submitted", "Accepted", "Fulfilled"]
 
 class OrderViewerApp:
     def __init__(self, root):
@@ -42,14 +42,25 @@ class OrderViewerApp:
         
         self.submit_button = ttk.Button(self.top_frame, text="Submit", command=self.validate_pin, bootstyle=SUCCESS)
         self.submit_button.grid(row=3, column=0, pady=10, padx=5)
-        
+
+        # Add search bar (initially hidden)
+        self.search_var = tk.StringVar()
+        self.search_entry = ttk.Entry(self.top_frame, textvariable=self.search_var, font=('Helvetica', 14))
+        self.search_entry.grid(row=4, column=0, pady=10, padx=5)
+        self.search_entry.grid_remove()
+
+        # Add search button (initially hidden)
+        self.search_button = ttk.Button(self.top_frame, text="Search", command=self.search_orders, bootstyle=INFO)
+        self.search_button.grid(row=5, column=0, pady=10, padx=5)
+        self.search_button.grid_remove()
+
         self.order_status_var = tk.StringVar(value=ORDER_STATUSES[0])
         self.order_status_dropdown = ttk.Combobox(self.top_frame, textvariable=self.order_status_var, values=ORDER_STATUSES)
-        self.order_status_dropdown.grid(row=4, column=0, pady=10, padx=5)
+        self.order_status_dropdown.grid(row=6, column=0, pady=10, padx=5)
         self.order_status_dropdown.bind("<<ComboboxSelected>>", self.refresh_orders)
         
         self.refresh_button = ttk.Button(self.top_frame, text="Refresh", command=self.refresh_orders, bootstyle=INFO)
-        self.refresh_button.grid(row=5, column=0, pady=10, padx=5)
+        self.refresh_button.grid(row=7, column=0, pady=10, padx=5)
         self.refresh_button.grid_remove()
         
         self.top_frame.grid_columnconfigure(0, weight=1)
@@ -104,6 +115,8 @@ class OrderViewerApp:
             self.submit_button.grid_remove()
             self.refresh_button.grid()
             self.order_status_dropdown.grid()
+            self.search_entry.grid()  # Show search bar after PIN is entered
+            self.search_button.grid()  # Show search button
             self.load_orders()
         else:
             messagebox.showerror("Error", "Invalid PIN")
@@ -115,6 +128,7 @@ class OrderViewerApp:
             orders = fetch_orders(status)
             if orders:
                 self.populate_treeview(orders)
+                self.orders = orders  # Store orders for search functionality
             else:
                 messagebox.showinfo("Information", f"No {status.lower()} orders to process.")
         except Exception as e:
@@ -122,6 +136,12 @@ class OrderViewerApp:
 
     def refresh_orders(self, event=None):
         self.load_orders()
+
+    def search_orders(self):
+        """Search orders by buyer name and update the view."""
+        search_text = self.search_var.get().lower()
+        filtered_orders = [order for order in self.orders if search_text in order.get("customer", {}).get("display_name", "").lower()]
+        self.populate_treeview(filtered_orders)
 
     def format_date(self, date_str):
         if date_str:
@@ -183,10 +203,10 @@ class OrderViewerApp:
             price_per_unit = sale_price if sale_price > 0 else ordered_unit_price
 
             # Get the unit multiplier
-            unit_multiplier = float(item.get("unit_multiplier", 1))  # Default to 1 if not provided
+            unit_multiplier = float(item.get("unit_multiplier", 1))
 
             # Calculate total units (cases being sold)
-            total_units = quantity / unit_multiplier  # This gives the number of cases sold
+            total_units = quantity / unit_multiplier
 
             # Calculate the total price based on the total units sold
             total_price = total_units * price_per_unit
@@ -225,7 +245,6 @@ class OrderViewerApp:
                 wt1,
                 wt2
             )
-            
             tree.insert('', 'end', values=values, tags=('sample',) if item.get("is_sample", False) else ())
 
     def copy_to_clipboard(self, tree):

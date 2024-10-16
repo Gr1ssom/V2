@@ -42,3 +42,4 @@ def update_order_status(order_id, new_status):
     except requests.exceptions.RequestException as e:
         print(f"API Error: {e}")
         return False
+
